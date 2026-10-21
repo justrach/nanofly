@@ -29,7 +29,7 @@ pub fn view(a: *App, c: *ui.Context) void {
     }
 
     // The camera: on what is shown, above the sheet, until moved by hand.
-    const area: ui.Rect = .{ .x = 44, .y = c.safe_area.top + 72, .w = size.w - 88, .h = @max(80, size.h - sheet_h - c.safe_area.top - 110) };
+    const area: ui.Rect = .{ .x = 44, .y = c.safe_area.top + 72, .w = size.w - 44 - 84, .h = @max(80, size.h - sheet_h - c.safe_area.top - 110) };
     if (a.follow) a.cam = fitted(routes.items, area, size);
 
     const box = ui.div(c).absolute().offset(0, 0).size(size.w, size.h);

@@ -6,6 +6,14 @@ Zig with [nanoui](https://github.com/justrach/nanoui), which draws all of it:
 the map's land from Natural Earth's outlines as triangles, the great circle a
 plane flies, the plane, and the card.
 
+<p align="center"><img src="docs/images/nanofly.gif" width="300" alt="nanofly in the iOS Simulator: a list of four flights in the air, then Frankfurt to Los Angeles and Tokyo to Honolulu on the map, with their cards"></p>
+
+<p align="center"><a href="docs/images/nanofly.mp4">The video (MP4)</a>, recorded in the iOS Simulator with live data
+(<code>--nanoui-play</code> taps; nothing is staged).</p>
+
+The whole app is about 1.2 MB to download (its release build, zipped): 230 KB of
+code, and the land, airports and airlines it carries.
+
 Type a flight number (`JL 121`, `BA 117`, or a callsign like `KLM41F`) and
 nanofly finds its route and follows it:
 
