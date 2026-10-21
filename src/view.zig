@@ -29,7 +29,7 @@ pub fn view(a: *App, c: *ui.Context) void {
     }
 
     // The camera: on what is shown, above the sheet, until moved by hand.
-    const area: ui.Rect = .{ .x = 28, .y = c.safe_area.top + 72, .w = size.w - 56, .h = @max(80, size.h - sheet_h - c.safe_area.top - 110) };
+    const area: ui.Rect = .{ .x = 44, .y = c.safe_area.top + 72, .w = size.w - 88, .h = @max(80, size.h - sheet_h - c.safe_area.top - 110) };
     if (a.follow) a.cam = fitted(routes.items, area, size);
 
     const box = ui.div(c).absolute().offset(0, 0).size(size.w, size.h);
@@ -45,13 +45,13 @@ pub fn view(a: *App, c: *ui.Context) void {
         const f = a.tracker.find(r.id).?;
         map.drawPlane(cv, a.cam.toScreen(size, p[0], p[1]), f.live.?.track, if (a.selected != null) 1.2 else 0.9);
     };
-    // The airports' codes beside them.
-    for (routes.items) |r| {
+    // The airports' codes beside them, when there's room: one flight, or close.
+    if (a.selected != null or a.cam.scale > 3000) for (routes.items) |r| {
         const f = a.tracker.find(r.id).?;
         label(c, a.cam.toScreen(size, r.arc[0][0], r.arc[0][1]), f.origin(&a.d).?.code());
         const e = r.arc[r.arc.len - 1];
         label(c, a.cam.toScreen(size, e[0], e[1]), f.destination(&a.d).?.code());
-    }
+    };
     controls(a, c, size, routes.items, area);
     _ = now;
     sheet.sheet(a, c, size, sheet_h);

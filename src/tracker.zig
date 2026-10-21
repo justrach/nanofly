@@ -259,6 +259,7 @@ fn heard(t: *Tracker, f: *Flight, l: sources.Live) void {
     const at = now();
     const first = f.live == null;
     f.live = l;
+    f.chooseLeg(t.d, l.pos, l.track);
     f.heard_at = at;
     if (l.on_ground or f.airborne_since != 0) return;
     f.airborne_since = at - l.age_s;

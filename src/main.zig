@@ -1,6 +1,6 @@
 //! nanofly: flights, live, on a map. nanoui's first iOS app, in Zig.
 //!
-//!   nanofly [--flight=JL121]...
+//!   nanofly [--flight=JL121]...   (one flight is shown; more are listed)
 //!
 //! OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, when set, are an OpenSky
 //! Network API client's (more requests a day).
@@ -25,12 +25,18 @@ pub fn main(init: std.process.Init) !void {
     state.tracker.opensky.id = env.get("OPENSKY_CLIENT_ID") orelse "";
     state.tracker.opensky.secret = env.get("OPENSKY_CLIENT_SECRET") orelse "";
 
-    // Flights asked for on the command line are shown (a demo), and not kept.
-    var asked = false;
+    // Flights asked for on the command line (a demo) are followed, not
+    // kept: one is shown, more are listed.
+    var asked: usize = 0;
+    var last: u32 = 0;
     for (try init.minimal.args.toSlice(init.arena.allocator())) |arg| {
-        if (std.mem.startsWith(u8, arg, "--flight=")) asked = state.followFlight(arg["--flight=".len..]) or asked;
+        if (!std.mem.startsWith(u8, arg, "--flight=")) continue;
+        const q = @import("flight.zig").Query.parse(arg["--flight=".len..]) orelse continue;
+        last = try state.tracker.add(q);
+        asked += 1;
     }
-    if (!asked) {
+    if (asked == 1) state.select(last);
+    if (asked == 0) {
         state.store_path = storePath(init.arena.allocator(), env.get("HOME") orelse "");
         state.load();
     }

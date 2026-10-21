@@ -64,8 +64,11 @@ pub const Flight = struct {
     /// On the radio: the operating airline's ICAO code and the number.
     callsign: Small(8) = .{},
     airline: ?u32 = null,
+    /// The leg shown, of its route's stops.
     from: ?u32 = null,
     to: ?u32 = null,
+    stops: [6]u32 = undefined,
+    n_stops: u8 = 0,
     /// Airlines tried for its route (by `data.Data.airlinesFor`), and whether
     /// none had it.
     tried: u8 = 0,
@@ -97,15 +100,42 @@ pub const Flight = struct {
     }
 
     /// Its route's airports from standing data's codes ("RJTT-RJOO", or
-    /// with stops between: the first and the last).
+    /// with stops: "WSSS-VHHH-PANC-KLAX", "KPHL-KSEA-KPHL"), its first leg
+    /// until it is heard on another.
     pub fn setRoute(f: *Flight, d: *const data.Data, codes: []const u8) bool {
-        const first_end = std.mem.indexOfScalar(u8, codes, '-') orelse return false;
-        const last_start = (std.mem.lastIndexOfScalar(u8, codes, '-') orelse return false) + 1;
-        const a = d.by_icao.get(codes[0..first_end]) orelse return false;
-        const b = d.by_icao.get(codes[last_start..]) orelse return false;
-        f.from = a;
-        f.to = b;
+        var n: u8 = 0;
+        var it = std.mem.splitScalar(u8, codes, '-');
+        while (it.next()) |code| {
+            if (n == f.stops.len) break;
+            f.stops[n] = d.by_icao.get(code) orelse return false;
+            n += 1;
+        }
+        if (n < 2) return false;
+        f.n_stops = n;
+        f.from = f.stops[0];
+        f.to = f.stops[1];
+        if (f.live) |l| f.chooseLeg(d, l.pos, l.track);
         return true;
+    }
+
+    /// The leg of its route a plane at `p` heading `track` is flying: the
+    /// one it is least out of its way on, going toward its end (a round
+    /// trip's two legs lie on one line).
+    pub fn chooseLeg(f: *Flight, d: *const data.Data, p: geo.LatLon, track: f64) void {
+        if (f.n_stops < 3) return;
+        var best: f64 = std.math.inf(f64);
+        for (0..f.n_stops - 1) |k| {
+            const a = d.airports[f.stops[k]].pos;
+            const b = d.airports[f.stops[k + 1]].pos;
+            var detour = geo.distanceKm(a, p) + geo.distanceKm(p, b) - geo.distanceKm(a, b);
+            const off = @abs(@mod(geo.bearing(p, b) - track + 540, 360) - 180);
+            if (off > 90) detour += 1000;
+            if (detour < best) {
+                best = detour;
+                f.from = f.stops[k];
+                f.to = f.stops[k + 1];
+            }
+        }
     }
 
     pub fn phase(f: *const Flight, d: *const data.Data, now: f64) Phase {
@@ -181,6 +211,20 @@ test "flight numbers as people type them" {
         try std.testing.expectEqualStrings(c.number, q.number.slice());
     }
     for ([_][]const u8{ "", "JL", "121", "12345", "JL123456", "J!12" }) |bad| try std.testing.expect(Query.parse(bad) == null);
+}
+
+test "a route with stops: the leg the plane is on" {
+    const gpa = std.testing.allocator;
+    var d = try data.Data.load(gpa);
+    defer d.deinit(gpa);
+    var f: Flight = .init(1, Query.parse("AA2870").?);
+    try std.testing.expect(f.setRoute(&d, "KPHL-KSEA-KPHL"));
+    try std.testing.expectEqualStrings("SEA", f.destination(&d).?.iata);
+    // Heard east of Seattle heading east: the way back.
+    const back = geo.along(d.airport("KSEA").?.pos, d.airport("KPHL").?.pos, 0.3);
+    f.chooseLeg(&d, back, geo.bearing(back, d.airport("KPHL").?.pos));
+    try std.testing.expectEqualStrings("SEA", f.origin(&d).?.iata);
+    try std.testing.expectEqualStrings("PHL", f.destination(&d).?.iata);
 }
 
 test "a flight's phase, progress and arrival as it flies" {
