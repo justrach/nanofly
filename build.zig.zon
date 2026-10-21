@@ -1,0 +1,13 @@
+.{
+    .name = .nanofly,
+    .version = "0.1.0",
+    .fingerprint = 0x6cc140e17a164f44,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .nanoui = .{
+            .url = "git+https://github.com/justrach/nanoui#887f70b05c4f5a4e5f7f7c1d1f87c61c734701c0",
+            .hash = "nanoui-0.6.4-we0KMWb1EACK2mQE0FRf0WrZC_BRT_N1_zzF7PfRmVvq",
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "data", "tools" },
+}
