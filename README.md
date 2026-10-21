@@ -29,7 +29,9 @@ nanofly finds its route and follows it:
 ## Build
 
 nanofly pins nanoui by commit; `--fork=../..` builds it against the nanoui
-it sits in (`apps/nanofly` of nanoui's repository).
+it sits in (`apps/nanofly` of nanoui's repository). iOS builds need Xcode for
+its SDK and nanoui's `tools/ios/zig-lib.sh` (Zig 0.17.0's std fixed for iOS),
+here run from nanoui's checkout around it.
 
 ```sh
 zig build run                     # on the Mac
