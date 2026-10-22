@@ -7,6 +7,8 @@ test {
     _ = @import("flight.zig");
     _ = @import("map.zig");
     _ = @import("clock.zig");
+    _ = @import("weather.zig");
+    _ = @import("style.zig");
     _ = @import("view_sheet.zig");
     _ = @import("tests_view.zig");
 }

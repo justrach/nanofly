@@ -6,9 +6,13 @@
 //!   the requests a day. Its terms ask a license of live products.
 //! - vradarserver's standing data (CC0): each airline's routes, by callsign.
 //!
-//! Only URLs and parsing here: tracker.zig asks.
+//! Only URLs and parsing here: tracker.zig asks (traffic.zig for the planes
+//! around one).
 const std = @import("std");
 const geo = @import("geo.zig");
+const http = @import("nanoui").http;
+
+pub const user_agent: http.Header = .{ .name = "User-Agent", .value = "nanofly/0.2 (+https://github.com/justrach/nanofly)" };
 
 pub fn Small(comptime n: usize) type {
     return struct {
@@ -154,6 +158,49 @@ pub fn parseAdsb(gpa: std.mem.Allocator, json: []const u8) ?Live {
     return best;
 }
 
+/// adsb.lol's aircraft within `nm` nautical miles of `p` (250 at most).
+pub fn pointUrl(buf: []u8, p: geo.LatLon, nm: f64) []const u8 {
+    return std.fmt.bufPrint(buf, "https://api.adsb.lol/v2/point/{d:.3}/{d:.3}/{d:.0}", .{ p.lat, p.lon, std.math.clamp(nm, 5, 250) }) catch "";
+}
+
+/// A plane around the one followed, as the map draws it.
+pub const Plane = struct {
+    pos: geo.LatLon,
+    track: f64 = 0,
+    alt_ft: f64 = 0,
+    gs_kt: f64 = 0,
+    callsign: Small(8) = .{},
+    type: Small(8) = .{},
+};
+
+/// adsb.lol's aircraft (an area's): those in the air with a position, as
+/// many as fit in `out`.
+pub fn parsePlanes(gpa: std.mem.Allocator, json: []const u8, out: []Plane) usize {
+    var parsed = std.json.parseFromSlice(std.json.Value, gpa, json, .{}) catch return 0;
+    defer parsed.deinit();
+    if (parsed.value != .object) return 0;
+    const ac = parsed.value.object.get("ac") orelse return 0;
+    if (ac != .array) return 0;
+    var n: usize = 0;
+    for (ac.array.items) |item| {
+        if (n == out.len) break;
+        if (item != .object) continue;
+        const o = item.object;
+        const alt = o.get("alt_baro") orelse continue;
+        if (alt == .string) continue;
+        out[n] = .{
+            .pos = .{ .lat = num(o.get("lat")) orelse continue, .lon = num(o.get("lon")) orelse continue },
+            .track = num(o.get("track")) orelse num(o.get("true_heading")) orelse 0,
+            .alt_ft = num(alt) orelse 0,
+            .gs_kt = num(o.get("gs")) orelse 0,
+        };
+        out[n].callsign.set(str(o.get("flight")));
+        out[n].type.set(str(o.get("t")));
+        n += 1;
+    }
+    return n;
+}
+
 /// OpenSky's answer: the aircraft flying as `callsign`, if there.
 pub fn parseOpenSky(gpa: std.mem.Allocator, json: []const u8, callsign: []const u8) ?Live {
     var parsed = std.json.parseFromSlice(std.json.Value, gpa, json, .{}) catch return null;
@@ -219,6 +266,11 @@ test "a route by its callsign; adsb.lol's and OpenSky's answers" {
     try std.testing.expectApproxEqAbs(@as(f64, 5), o.age_s, 0.01);
     try std.testing.expect(parseOpenSky(gpa, sky, "JAL1") == null);
 
+    var planes: [4]Plane = undefined;
+    try std.testing.expectEqual(@as(usize, 1), parsePlanes(gpa, adsb, &planes));
+    try std.testing.expectEqualStrings("JAL121", planes[0].callsign.slice());
+
     var buf: [128]u8 = undefined;
+    try std.testing.expectEqualStrings("https://api.adsb.lol/v2/point/35.100/137.200/250", pointUrl(&buf, .{ .lat = 35.1, .lon = 137.2 }, 900));
     try std.testing.expectEqualStrings("grant_type=client_credentials&client_id=a%2Bb&client_secret=c%20d", tokenBody(&buf, "a+b", "c d"));
 }

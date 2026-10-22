@@ -18,7 +18,7 @@ pub fn now() f64 {
     return @as(f64, @floatFromInt(ts.sec)) + @as(f64, @floatFromInt(ts.nsec)) / 1e9;
 }
 
-const user_agent: http.Header = .{ .name = "User-Agent", .value = "nanofly/0.1 (+https://github.com/justrach/nanoui)" };
+const user_agent = sources.user_agent;
 
 pub const Tracker = struct {
     gpa: std.mem.Allocator,

@@ -24,3 +24,11 @@ nanofly is built on [nanoui](https://github.com/justrach/nanoui), Copyright (c)
   [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/), and the
   [OpenSky Network](https://opensky-network.org) (The OpenSky Network,
   https://opensky-network.org), under its [terms of use](https://opensky-network.org/about/terms-of-use).
+- **Planes around**: adsb.lol's aircraft near the map's middle, under the
+  [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/).
+- **Weather radar**: [RainViewer](https://www.rainviewer.com)'s Weather Maps
+  API, free for personal and educational use, under its
+  [terms](https://www.rainviewer.com/terms.html).
+- **Weather at airports**: [Open-Meteo](https://open-meteo.com), under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), free for
+  non-commercial use.

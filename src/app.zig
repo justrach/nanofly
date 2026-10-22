@@ -1,6 +1,7 @@
 //! nanofly's state: the data it carries, the flights it follows (kept in
-//! a file between launches), the one shown, the map's camera, and the
-//! clock that asks after them again every 15 seconds.
+//! a file between launches), the one shown, the map's camera and layers
+//! (the weather's radar, the planes around), the sheet's height, and the
+//! clock that asks after them all again every 15 seconds.
 const std = @import("std");
 const builtin = @import("builtin");
 const nanoui = @import("nanoui");
@@ -10,8 +11,24 @@ const land_mod = @import("land.zig");
 const flight = @import("flight.zig");
 const map = @import("map.zig");
 const tracker_mod = @import("tracker.zig");
+const weather_mod = @import("weather.zig");
+const traffic_mod = @import("traffic.zig");
+const sources = @import("sources.zig");
 
 pub const poll_seconds = 15;
+
+/// The heights the sheet rests at: its head alone, half the screen, all of it.
+pub const Detent = enum { peek, half, full };
+
+/// The sheet held by its head: where the finger and the sheet were, and
+/// how fast it is going.
+pub const Grab = struct {
+    finger: f32,
+    top: f32,
+    last: f32,
+    last_time: f64,
+    velocity: f32 = 0,
+};
 
 pub const App = struct {
     gpa: std.mem.Allocator,
@@ -23,14 +40,34 @@ pub const App = struct {
     coarse: land_mod.Land,
     fine: land_mod.Land,
     tracker: tracker_mod.Tracker,
+    weather: weather_mod.Weather,
+    traffic: traffic_mod.Traffic,
     /// The flight shown (its id); the list when null.
     selected: ?u32 = null,
     search: ui.TextBuffer = .{},
     search_error: []const u8 = "",
+    /// The search field takes the keyboard on the next frame.
+    focus_search: bool = false,
     cam: map.Camera = .{},
     /// The camera follows what is shown until the map is moved by hand.
     follow: bool = true,
+    /// The finger on the map: where it went down and last was, and whether
+    /// it has moved enough to be a drag rather than a tap.
     drag: ?ui.Point = null,
+    drag_from: ui.Point = .{},
+    dragged: bool = false,
+    drag_time: f64 = 0,
+    /// The map moving on after a fling, points a second.
+    fling: ui.Point = .{},
+    show_weather: bool = true,
+    show_traffic: bool = true,
+    /// A plane around, tapped: its callsign (the card over it offers it).
+    picked: sources.Small(8) = .{},
+    detent: Detent = .half,
+    grab: ?Grab = null,
+    /// A word shown for a moment ("Copied"), and until when.
+    toast: []const u8 = "",
+    toast_until: f64 = 0,
     ticking: bool = false,
 
     pub fn init(a: *App, gpa: std.mem.Allocator, io: std.Io) !void {
@@ -41,15 +78,29 @@ pub const App = struct {
             .coarse = try land_mod.Land.parse(gpa, @embedFile("land110.mesh")),
             .fine = try land_mod.Land.parse(gpa, @embedFile("land50.mesh")),
             .tracker = undefined,
+            .weather = .{ .gpa = gpa },
+            .traffic = .{ .gpa = gpa },
         };
         a.tracker = .{ .gpa = gpa, .d = &a.d, .redraw_ctx = a, .redraw_fn = redrawC };
+        a.weather.redraw_ctx = a;
+        a.weather.redraw_fn = redrawC;
+        a.traffic.redraw_ctx = a;
+        a.traffic.redraw_fn = redrawC;
     }
 
     pub fn deinit(a: *App) void {
         a.tracker.deinit();
+        a.weather.deinit();
         a.d.deinit(a.gpa);
         a.coarse.deinit(a.gpa);
         a.fine.deinit(a.gpa);
+    }
+
+    /// Asks nothing of the network (tests).
+    pub fn goOffline(a: *App) void {
+        a.tracker.offline = true;
+        a.weather.offline = true;
+        a.traffic.offline = true;
     }
 
     fn redrawC(ctx: ?*anyopaque) void {
@@ -78,12 +129,19 @@ pub const App = struct {
     pub fn select(a: *App, id: ?u32) void {
         a.selected = id;
         a.follow = true;
+        a.picked = .{};
+        if (a.detent == .full or id != null) a.detent = .half;
     }
 
     pub fn unfollow(a: *App, id: u32) void {
         a.tracker.remove(id);
         if (a.selected == id) a.select(null);
         a.save();
+    }
+
+    pub fn say(a: *App, word: []const u8, now: f64) void {
+        a.toast = word;
+        a.toast_until = now + 1.6;
     }
 
     // The flights followed, one per line, in the app's own folder.
@@ -121,7 +179,8 @@ pub const App = struct {
     fn tick(ctx: ?*anyopaque) callconv(.c) void {
         const a: *App = @ptrCast(@alignCast(ctx.?));
         a.tracker.poll();
-        // "Took off 29m ago" moves on.
+        // "Took off 29m ago" moves on; the planes around and the radar are
+        // asked again as the frame draws them.
         redrawC(a);
         nanoui.objc.dispatchAfter(poll_seconds * std.time.ns_per_s, a, tick);
     }

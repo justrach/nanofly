@@ -71,6 +71,49 @@ pub fn mercator(p: LatLon) [2]f64 {
     return .{ (p.lon + 180) / 360, 0.5 - y / (2 * math.pi) };
 }
 
+/// The place at (x, y) on the square.
+pub fn unmercator(x: f64, y: f64) LatLon {
+    const lat = deg(math.atan(math.sinh((0.5 - y) * 2 * math.pi)));
+    return .{ .lat = lat, .lon = @mod(x, 1) * 360 - 180 };
+}
+
+/// Where the sun is overhead at `unix` seconds, to a fraction of a degree
+/// (the Astronomical Almanac's low-precision formulas).
+pub fn subsolar(unix: f64) LatLon {
+    const d = (unix - 946728000) / 86400;
+    const g = rad(357.529 + 0.98560028 * d);
+    const l = rad(280.459 + 0.98564736 * d + 1.915 * @sin(g) + 0.020 * @sin(2 * g));
+    const e = rad(23.439 - 0.00000036 * d);
+    const ra = deg(math.atan2(@cos(e) * @sin(l), @cos(l)));
+    const dec = deg(math.asin(@sin(e) * @sin(l)));
+    const gmst = @mod(18.697374558 + 24.06570982441908 * d, 24) * 15;
+    return .{ .lat = dec, .lon = @mod(ra - gmst + 540, 360) - 180 };
+}
+
+/// The latitude at longitude `lon` where the sun, overhead at `sun`, is
+/// `alt` degrees high (0: where it sets; -6, -12: dusk's ends). The night
+/// lies from there toward the pole away from the sun.
+pub fn dusk(sun: LatLon, lon: f64, alt: f64) f64 {
+    const d = rad(sun.lat);
+    const a = @sin(d);
+    const b = @cos(d) * @cos(rad(lon - sun.lon));
+    const r = @sqrt(a * a + b * b);
+    const s = @sin(rad(alt));
+    const pole: f64 = if (sun.lat > 0) -90 else 90;
+    // Never that low here: no night; always lower: night pole to pole.
+    if (s <= -r) return pole;
+    if (s >= r) return -pole;
+    // Altitude along the meridian is r * sin(lat + phase).
+    const phase = math.atan2(b, a);
+    const x = math.asin(s / r);
+    var best: f64 = -pole;
+    for ([2]f64{ x - phase, math.pi - x - phase }) |c| {
+        const lat = deg(math.atan2(@sin(c), @cos(c)));
+        if (@abs(lat) <= 90 and @abs(lat - pole) < @abs(best - pole)) best = lat;
+    }
+    return best;
+}
+
 /// The great circle from `a` to `b` on the square, in `out.len` points,
 /// its x carried on past the square's sides rather than jumping across
 /// (a flight over the Pacific), so it draws as one line.
@@ -108,6 +151,23 @@ test "the great circle's middle, a bearing, progress along it" {
     const jfk: LatLon = .{ .lat = 40.6413, .lon = -73.7781 };
     const h = bearing(lhr, jfk);
     try std.testing.expect(h > 280 and h < 300);
+}
+
+test "the square and back; the sun overhead, and where it sets" {
+    const p = unmercator(mercator(.{ .lat = 35.5, .lon = 139.8 })[0], mercator(.{ .lat = 35.5, .lon = 139.8 })[1]);
+    try std.testing.expectApproxEqAbs(@as(f64, 35.5), p.lat, 1e-9);
+    try std.testing.expectApproxEqAbs(@as(f64, 139.8), p.lon, 1e-9);
+    // The June solstice, 2026-06-21 12:00 UTC: over the Tropic of Cancer,
+    // near Greenwich.
+    const s = subsolar(1782043200);
+    try std.testing.expectApproxEqAbs(@as(f64, 23.44), s.lat, 0.1);
+    try std.testing.expectApproxEqAbs(@as(f64, 0), s.lon, 1);
+    // Opposite the sun, night reaches the Arctic Circle (the midnight sun
+    // north of it); under the sun, it's dark only past the Antarctic Circle.
+    try std.testing.expectApproxEqAbs(@as(f64, 66.56), dusk(s, 180, 0), 0.5);
+    try std.testing.expectApproxEqAbs(@as(f64, -66.56), dusk(s, s.lon, 0), 0.5);
+    // Dusk's end lies further into the night.
+    try std.testing.expect(dusk(s, 90, -12) < dusk(s, 90, 0));
 }
 
 test "an arc over the Pacific carries on past the map's edge" {
