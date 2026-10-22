@@ -6,6 +6,11 @@
 //!   the requests a day. Its terms ask a license of live products.
 //! - vradarserver's standing data (CC0): each airline's routes, by callsign.
 //!
+//! With a backend (backend/, a Cloudflare Worker), adsb.lol and the routes
+//! are asked of it instead, in the same shapes: phones share its answers,
+//! and it remembers where each flight was last heard. OpenSky is asked
+//! directly still: it doesn't answer Workers.
+//!
 //! Only URLs and parsing here: tracker.zig asks (traffic.zig for the planes
 //! around one).
 const std = @import("std");
@@ -13,6 +18,10 @@ const geo = @import("geo.zig");
 const http = @import("nanoui").http;
 
 pub const user_agent: http.Header = .{ .name = "User-Agent", .value = "nanofly/0.2 (+https://github.com/justrach/nanofly)" };
+
+/// The backend's address ("https://nanofly-api.example.workers.dev"), or
+/// empty to ask each source itself.
+pub var api: []const u8 = "";
 
 pub fn Small(comptime n: usize) type {
     return struct {
@@ -60,17 +69,21 @@ pub const Live = struct {
 };
 
 pub fn adsbUrl(buf: []u8, callsign: []const u8) []const u8 {
+    if (api.len > 0) return std.fmt.bufPrint(buf, "{s}/v1/callsign/{s}", .{ api, callsign }) catch "";
     return std.fmt.bufPrint(buf, "https://api.adsb.lol/v2/callsign/{s}", .{callsign}) catch "";
 }
 
 pub fn routesUrl(buf: []u8, airline_icao: []const u8) []const u8 {
     if (airline_icao.len == 0) return "";
+    if (api.len > 0) return std.fmt.bufPrint(buf, "{s}/v1/routes/{s}", .{ api, airline_icao }) catch "";
     return std.fmt.bufPrint(buf, "https://raw.githubusercontent.com/vradarserver/standing-data/main/routes/schema-01/{c}/{s}-all.csv", .{ airline_icao[0], airline_icao }) catch "";
 }
 
 pub const opensky_token_url = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 
-/// OpenSky's aircraft over the box from `a` to `b` (and a margin).
+/// OpenSky's aircraft over the box from `a` to `b` (and a margin). Always
+/// asked of OpenSky itself, backend or not: it doesn't answer Cloudflare's
+/// Workers (their requests time out).
 pub fn openskyUrl(buf: []u8, a: geo.LatLon, b: geo.LatLon) []const u8 {
     const m = 1.0;
     return std.fmt.bufPrint(buf, "https://opensky-network.org/api/states/all?lamin={d:.3}&lomin={d:.3}&lamax={d:.3}&lomax={d:.3}", .{
@@ -160,6 +173,7 @@ pub fn parseAdsb(gpa: std.mem.Allocator, json: []const u8) ?Live {
 
 /// adsb.lol's aircraft within `nm` nautical miles of `p` (250 at most).
 pub fn pointUrl(buf: []u8, p: geo.LatLon, nm: f64) []const u8 {
+    if (api.len > 0) return std.fmt.bufPrint(buf, "{s}/v1/point/{d:.3}/{d:.3}/{d:.0}", .{ api, p.lat, p.lon, std.math.clamp(nm, 5, 250) }) catch "";
     return std.fmt.bufPrint(buf, "https://api.adsb.lol/v2/point/{d:.3}/{d:.3}/{d:.0}", .{ p.lat, p.lon, std.math.clamp(nm, 5, 250) }) catch "";
 }
 
@@ -273,4 +287,18 @@ test "a route by its callsign; adsb.lol's and OpenSky's answers" {
     var buf: [128]u8 = undefined;
     try std.testing.expectEqualStrings("https://api.adsb.lol/v2/point/35.100/137.200/250", pointUrl(&buf, .{ .lat = 35.1, .lon = 137.2 }, 900));
     try std.testing.expectEqualStrings("grant_type=client_credentials&client_id=a%2Bb&client_secret=c%20d", tokenBody(&buf, "a+b", "c d"));
+}
+
+test "with a backend, every source is asked of it" {
+    api = "https://nanofly-api.example.workers.dev";
+    defer api = "";
+    var buf: [256]u8 = undefined;
+    try std.testing.expectEqualStrings("https://nanofly-api.example.workers.dev/v1/callsign/SIA22", adsbUrl(&buf, "SIA22"));
+    try std.testing.expectEqualStrings("https://nanofly-api.example.workers.dev/v1/routes/SIA", routesUrl(&buf, "SIA"));
+    try std.testing.expectEqualStrings("https://nanofly-api.example.workers.dev/v1/point/35.100/137.200/250", pointUrl(&buf, .{ .lat = 35.1, .lon = 137.2 }, 900));
+    // OpenSky doesn't answer Workers: asked directly still.
+    try std.testing.expectEqualStrings(
+        "https://opensky-network.org/api/states/all?lamin=0.300&lomin=-1.500&lamax=52.500&lomax=104.900",
+        openskyUrl(&buf, .{ .lat = 51.5, .lon = -0.5 }, .{ .lat = 1.3, .lon = 103.9 }),
+    );
 }

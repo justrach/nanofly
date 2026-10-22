@@ -15,12 +15,18 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "triangulate", .module = b.createModule(.{ .root_source_file = dep.path("src/ui/triangulate.zig"), .target = b.graph.host, .optimize = .ReleaseFast }) }},
     }) });
 
+    // nanofly's backend (backend/, a Cloudflare Worker), built in: iOS apps
+    // have no environment. NANOFLY_API, where there is one, overrides it.
+    const options = b.addOptions();
+    options.addOption([]const u8, "api", b.option([]const u8, "api", "nanofly's backend, like https://nanofly-api.example.workers.dev (default: ask each source)") orelse "");
+
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{.{ .name = "nanoui", .module = nanoui }},
     });
+    mod.addOptions("build_options", options);
     embedData(b, mod, meshgen);
     const exe = b.addExecutable(.{ .name = "nanofly", .root_module = mod });
 

@@ -64,6 +64,15 @@ zig build $(sh ../../tools/ios/zig-lib.sh) run -Dtarget=aarch64-ios-simulator --
 `--flight=NUMBER` shows a flight without keeping it; more than one are listed. `python3 tools/prep.py`
 makes `data/` again from its sources.
 
+## Backend
+
+[`backend/`](backend/README.md) is an optional Cloudflare Worker the app can
+ask instead of adsb.lol and the routes: phones share its answers, and it
+keeps routes and each flight's last known position in Workers KV. OpenSky,
+which doesn't answer Workers, is asked directly still.
+Build the app against it with `-Dapi=https://...` (or `NANOFLY_API` on the
+Mac); without it, the app asks each source itself, as before.
+
 ## Data
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). The OpenSky Network

@@ -3,7 +3,8 @@
 //!   nanofly [--flight=JL121]...   (one flight is shown; more are listed)
 //!
 //! OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, when set, are an OpenSky
-//! Network API client's (more requests a day).
+//! Network API client's (more requests a day). NANOFLY_API (or the build's
+//! -Dapi) is a backend to ask instead of each source (backend/).
 const std = @import("std");
 const builtin = @import("builtin");
 const nanoui = @import("nanoui");
@@ -11,6 +12,7 @@ const ui = nanoui.ui;
 const App = @import("app.zig").App;
 const storePath = @import("app.zig").storePath;
 const view = @import("view.zig");
+const sources = @import("sources.zig");
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -24,6 +26,7 @@ pub fn main(init: std.process.Init) !void {
     const env = init.environ_map;
     state.tracker.opensky.id = env.get("OPENSKY_CLIENT_ID") orelse "";
     state.tracker.opensky.secret = env.get("OPENSKY_CLIENT_SECRET") orelse "";
+    sources.api = std.mem.trimEnd(u8, env.get("NANOFLY_API") orelse @import("build_options").api, "/");
 
     // Flights asked for on the command line (a demo) are followed, not
     // kept: one is shown, more are listed.

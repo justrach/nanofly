@@ -154,7 +154,7 @@ pub const Tracker = struct {
         t.routes.put(t.gpa, key, .asking) catch return t.gpa.free(key);
         const a = t.ask() orelse return;
         @memcpy(&a.airline, icao[0..3]);
-        var buf: [160]u8 = undefined;
+        var buf: [320]u8 = undefined;
         http.fetch(t.gpa, .{ .url = sources.routesUrl(&buf, icao), .headers = &.{user_agent} }, a, routesAnswered);
     }
 
@@ -176,7 +176,7 @@ pub const Tracker = struct {
         const a = t.ask() orelse return;
         a.id = f.id;
         f.asking = true;
-        var buf: [96]u8 = undefined;
+        var buf: [256]u8 = undefined;
         http.fetch(t.gpa, .{ .url = sources.adsbUrl(&buf, f.callsign.slice()), .headers = &.{user_agent}, .timeout = 15 }, a, adsbAnswered);
     }
 
@@ -202,7 +202,7 @@ pub const Tracker = struct {
         const a = t.ask() orelse return;
         a.id = f.id;
         f.asking = true;
-        var url: [192]u8 = undefined;
+        var url: [320]u8 = undefined;
         var auth: [4200]u8 = undefined;
         var headers: [2]http.Header = .{ user_agent, undefined };
         var n: usize = 1;
