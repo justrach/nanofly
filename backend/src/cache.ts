@@ -1,6 +1,6 @@
 // What the Worker keeps: a few seconds in each isolate's memory (the Cache
 // API does nothing on workers.dev), and in KV what outlives a request:
-// routes, the last place each flight was heard, OpenSky's token.
+// routes, and the last place each flight was heard.
 
 type Entry = { at: number; status: number; body: string; type: string };
 

@@ -15,18 +15,18 @@ so the app only changes where it asks (`-Dapi=...`).
   (over an ocean), that is said, so the app asks OpenSky, which may.
 - **Answers say how long they keep** (`Cache-Control`): the phone's own
   HTTP cache keeps routes an hour and positions five seconds.
-- **OpenSky's client stays here**, as the Worker's secrets, not in the app.
+- **Not OpenSky**: it doesn't answer Cloudflare's Workers (requests from
+  them time out, a 522), so the app asks it directly, as without a backend.
 
 | Route | Answer |
 |---|---|
 | `GET /v1/callsign/:cs` | where a flight is: adsb.lol's JSON, only the fields the app reads |
 | `GET /v1/routes/:icao` | an airline's routes: standing data's CSV |
 | `GET /v1/point/:lat/:lon/:nm` | the planes around a point: adsb.lol's JSON, rounded so nearby asks share |
-| `GET /v1/opensky?lamin=&lomin=&lamax=&lomax=` | OpenSky's states over a box |
 
 `X-Nanofly-Source` says where an answer came from: `memory`, `kv`,
-`kv-stale` (adsb.lol couldn't answer), `adsb.lol`, `standing-data`,
-`opensky` or `error`.
+`kv-stale` (adsb.lol couldn't answer), `adsb.lol`, `standing-data` or
+`error`.
 
 ## KV and its limits
 
@@ -35,7 +35,10 @@ reads elsewhere in the world can be a minute old. So fresh positions are
 never read from KV: it keeps routes, and each flight's last position,
 written at most once a minute per flight by each isolate. A write turned
 away is let go (the cache is a convenience). On a `*.workers.dev` address
-the Cache API does nothing, so memory is the short-term cache.
+the Cache API does nothing, so memory is the short-term cache; in production
+requests in a row often reach different isolates, so it is shared less than
+locally (a custom domain would let the Cache API share answers in each
+data center).
 
 ## Develop and deploy
 
@@ -47,13 +50,8 @@ npm install
 npm run dev          # cf dev: http://localhost:5173, with a local KV
 npm run typecheck
 npm run smoke        # every route against the live sources (or: npm run smoke -- https://...)
-npx cf deploy        # makes the FLIGHTS namespace the first time
+npx cf deploy        # (or wrangler deploy with the built bundle; the namespace id is pinned)
 ```
-
-An OpenSky API client, optional (then OpenSky allows ten times the requests
-a day), is set as two secrets, `OPENSKY_CLIENT_ID` and
-`OPENSKY_CLIENT_SECRET` (for `cf dev`, in `.dev.vars`). The OpenSky Network
-asks that live products using its API have its written permission.
 
 Then build the app against it:
 

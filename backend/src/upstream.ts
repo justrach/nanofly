@@ -26,11 +26,6 @@ export function routesCsv(icao: string): string {
 	return `https://raw.githubusercontent.com/vradarserver/standing-data/main/routes/schema-01/${icao[0]}/${icao}-all.csv`;
 }
 
-export const opensky_token_url = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
-
-export function openskyStates(box: { lamin: number; lomin: number; lamax: number; lomax: number }): string {
-	return `https://opensky-network.org/api/states/all?lamin=${box.lamin}&lomin=${box.lomin}&lamax=${box.lamax}&lomax=${box.lomax}`;
-}
 
 /** adsb.lol's fields the app reads, so answers stay small. */
 const kept = ["hex", "flight", "r", "t", "alt_baro", "gs", "track", "true_heading", "baro_rate", "geom_rate", "lat", "lon", "seen_pos", "seen"];

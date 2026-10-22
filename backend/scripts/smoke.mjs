@@ -1,5 +1,5 @@
-// Checks a running nanofly-api against the live sources: every route, its
-// caching, and its answers to bad requests.
+// Checks a running nanofly-api against the live sources: every route, and
+// its answers to bad requests (and notes where answers came from).
 //
 //   node scripts/smoke.mjs http://localhost:5173
 //   node scripts/smoke.mjs https://nanofly-api.<subdomain>.workers.dev
@@ -12,6 +12,12 @@ let failed = 0;
 function check(name, ok, detail = "") {
 	console.log(`${ok ? "ok  " : "FAIL"}  ${name}${detail ? `  (${detail})` : ""}`);
 	if (!ok) failed++;
+}
+
+/** What's worth seeing but not a failure: in production, requests in a row
+ * may reach different isolates, each with its own memory. */
+function note(name, detail) {
+	console.log(`note  ${name}  (${detail})`);
 }
 
 async function get(path, init) {
@@ -44,7 +50,7 @@ for (const c of FLIGHTS) {
 check("a flight in the air is found", cs !== null, cs ?? "none of " + FLIGHTS.join(" "));
 if (cs) {
 	const again = await get(`/v1/callsign/${cs}`);
-	check("asked again, from memory", again.source === "memory", `${again.source}, ${again.ms} ms`);
+	note("asked again", `${again.source}, ${again.ms} ms`);
 	const ac = json(again.body)?.ac?.[0] ?? {};
 	check("only the fields the app reads", !("emergency" in ac) && "lat" in ac && "seen_pos" in ac, Object.keys(ac).join(","));
 	const lower = await get(`/v1/callsign/${cs.toLowerCase()}`);
@@ -55,11 +61,7 @@ if (cs) {
 	const point = await get(`/v1/point/${p.lat}/${p.lon}/100`);
 	check("the planes around it", point.status === 200 && json(point.body)?.ac?.length > 0, `${json(point.body)?.ac?.length} planes, ${point.source}`);
 	const near = await get(`/v1/point/${p.lat + 0.01}/${p.lon - 0.01}/95`);
-	check("about the same place shares the answer", near.source === "memory", near.source);
-	const box = `lamin=${Math.floor(p.lat) - 2}&lomin=${Math.floor(p.lon) - 2}&lamax=${Math.ceil(p.lat) + 2}&lomax=${Math.ceil(p.lon) + 2}`;
-	const sky = await get(`/v1/opensky?${box}`);
-	const states = json(sky.body)?.states ?? [];
-	check("OpenSky over a box", sky.status === 200 && Array.isArray(states), `${states.length} states, ${sky.ms} ms, ${sky.status}`);
+	note("about the same place, asked again", near.source);
 }
 
 const unknown = await get("/v1/routes/ZZZ");
@@ -73,8 +75,8 @@ for (const [path, status] of [
 	["/v1/point/95/0/10", 400],
 	["/v1/point/0/0/0", 400],
 	["/v1/point/a/b/c", 400],
-	["/v1/opensky?lamin=1", 400],
-	["/v1/opensky?lamin=10&lomin=10&lamax=0&lomax=20", 400],
+	// OpenSky doesn't answer Workers: the app asks it directly.
+	["/v1/opensky?lamin=0&lomin=0&lamax=1&lomax=1", 404],
 	["/v1/nothing", 404],
 	["/v2/callsign/SIA22", 404],
 ]) {

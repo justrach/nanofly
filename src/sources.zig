@@ -6,9 +6,10 @@
 //!   the requests a day. Its terms ask a license of live products.
 //! - vradarserver's standing data (CC0): each airline's routes, by callsign.
 //!
-//! With a backend (backend/, a Cloudflare Worker), all of them are asked of
-//! it instead, in the same shapes: phones share its answers, it keeps
-//! OpenSky's client, and remembers where each flight was last heard.
+//! With a backend (backend/, a Cloudflare Worker), adsb.lol and the routes
+//! are asked of it instead, in the same shapes: phones share its answers,
+//! and it remembers where each flight was last heard. OpenSky is asked
+//! directly still: it doesn't answer Workers.
 //!
 //! Only URLs and parsing here: tracker.zig asks (traffic.zig for the planes
 //! around one).
@@ -80,12 +81,14 @@ pub fn routesUrl(buf: []u8, airline_icao: []const u8) []const u8 {
 
 pub const opensky_token_url = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 
-/// OpenSky's aircraft over the box from `a` to `b` (and a margin).
+/// OpenSky's aircraft over the box from `a` to `b` (and a margin). Always
+/// asked of OpenSky itself, backend or not: it doesn't answer Cloudflare's
+/// Workers (their requests time out).
 pub fn openskyUrl(buf: []u8, a: geo.LatLon, b: geo.LatLon) []const u8 {
     const m = 1.0;
-    const box = .{ @max(-90, @min(a.lat, b.lat) - m), @max(-180, @min(a.lon, b.lon) - m), @min(90, @max(a.lat, b.lat) + m), @min(180, @max(a.lon, b.lon) + m) };
-    if (api.len > 0) return std.fmt.bufPrint(buf, "{s}/v1/opensky?lamin={d:.3}&lomin={d:.3}&lamax={d:.3}&lomax={d:.3}", .{api} ++ box) catch "";
-    return std.fmt.bufPrint(buf, "https://opensky-network.org/api/states/all?lamin={d:.3}&lomin={d:.3}&lamax={d:.3}&lomax={d:.3}", box) catch "";
+    return std.fmt.bufPrint(buf, "https://opensky-network.org/api/states/all?lamin={d:.3}&lomin={d:.3}&lamax={d:.3}&lomax={d:.3}", .{
+        @max(-90, @min(a.lat, b.lat) - m), @max(-180, @min(a.lon, b.lon) - m), @min(90, @max(a.lat, b.lat) + m), @min(180, @max(a.lon, b.lon) + m),
+    }) catch "";
 }
 
 /// The form OpenSky's token wants, its values escaped.
@@ -293,8 +296,9 @@ test "with a backend, every source is asked of it" {
     try std.testing.expectEqualStrings("https://nanofly-api.example.workers.dev/v1/callsign/SIA22", adsbUrl(&buf, "SIA22"));
     try std.testing.expectEqualStrings("https://nanofly-api.example.workers.dev/v1/routes/SIA", routesUrl(&buf, "SIA"));
     try std.testing.expectEqualStrings("https://nanofly-api.example.workers.dev/v1/point/35.100/137.200/250", pointUrl(&buf, .{ .lat = 35.1, .lon = 137.2 }, 900));
+    // OpenSky doesn't answer Workers: asked directly still.
     try std.testing.expectEqualStrings(
-        "https://nanofly-api.example.workers.dev/v1/opensky?lamin=0.300&lomin=-1.500&lamax=52.500&lomax=104.900",
+        "https://opensky-network.org/api/states/all?lamin=0.300&lomin=-1.500&lamax=52.500&lomax=104.900",
         openskyUrl(&buf, .{ .lat = 51.5, .lon = -0.5 }, .{ .lat = 1.3, .lon = 103.9 }),
     );
 }

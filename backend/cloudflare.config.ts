@@ -7,13 +7,10 @@ export default defineConfig({
 		compatibilityDate: "2026-10-19",
 		entrypoint,
 		env: {
-			// Routes for a week, and each flight's last known position.
-			// cf deploy makes the namespace the first time.
-			FLIGHTS: bindings.kv(),
-			// OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET, an OpenSky Network
-			// API client, may be set as the Worker's secrets: then OpenSky
-			// gives ten times the requests a day. Not declared here, as
-			// declared secrets are required.
+			// Routes for a week, and each flight's last known position
+			// (the namespace nanofly-api-FLIGHTS; without an id, cf deploy
+			// makes one).
+			FLIGHTS: bindings.kv({ id: "c0bd7b228ed04dad947e2cf75dce7dcb" }),
 		},
 	},
 });
