@@ -44,7 +44,7 @@ pub const Traffic = struct {
         t.asked = now;
         t.center = p;
         t.radius_nm = reach;
-        var buf: [96]u8 = undefined;
+        var buf: [256]u8 = undefined;
         http.fetch(t.gpa, .{ .url = sources.pointUrl(&buf, p, t.radius_nm), .headers = &.{sources.user_agent}, .timeout = 15 }, t, answered);
     }
 
