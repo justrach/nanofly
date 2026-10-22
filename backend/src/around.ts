@@ -67,8 +67,11 @@ async function openskyToken(all: Env, ctx: ExecutionContext): Promise<string | n
 
 /** GET /v1/opensky?lamin=&lomin=&lamax=&lomax=, OpenSky's states over a box. */
 export async function opensky(env: Env, ctx: ExecutionContext, q: URLSearchParams): Promise<Response> {
-	const v = ["lamin", "lomin", "lamax", "lomax"].map((k) => Number(q.get(k)));
-	if (v.some((x) => !Number.isFinite(x)) || Math.abs(v[0]) > 90 || Math.abs(v[2]) > 90 || Math.abs(v[1]) > 180 || Math.abs(v[3]) > 180) return bad("box");
+	const raw = ["lamin", "lomin", "lamax", "lomax"].map((k) => q.get(k)?.trim() ?? "");
+	// Number("") is 0: a missing bound isn't one.
+	if (raw.some((x) => x === "")) return bad("box");
+	const v = raw.map(Number);
+	if (v.some((x) => !Number.isFinite(x)) || Math.abs(v[0]) > 90 || Math.abs(v[2]) > 90 || Math.abs(v[1]) > 180 || Math.abs(v[3]) > 180 || v[0] > v[2] || v[1] > v[3]) return bad("box");
 	const box = { lamin: round(v[0], 0.1), lomin: round(v[1], 0.1), lamax: round(v[2], 0.1), lomax: round(v[3], 0.1) };
 	const key = `opensky:${box.lamin}/${box.lomin}/${box.lamax}/${box.lomax}`;
 	const m = recall(key, memory_s);

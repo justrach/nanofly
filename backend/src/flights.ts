@@ -15,7 +15,8 @@ const live_memory_s = 5;
  * minute old elsewhere. It keeps where a flight was last heard. */
 const live_kv_every_s = 60;
 const written = new Map<string, number>();
-/** How long the last known position answers when adsb.lol can't. */
+/** How long the last known position answers when adsb.lol fails (not
+ * when it answers without the plane: then the app asks OpenSky). */
 const live_stale_s = 600;
 const live_kv_ttl_s = 3600;
 
@@ -56,15 +57,17 @@ export async function live(env: Env, ctx: ExecutionContext, raw: string): Promis
 		}
 		return answer({ status: 200, body, type: json }, "adsb.lol", live_memory_s);
 	}
-	// adsb.lol can't answer, or doesn't hear it now (over an ocean): where
-	// it was last heard, if lately, and how long ago.
-	const kept = await env.FLIGHTS.get<Heard>(key, "json");
-	if (kept && now() - kept.at < live_stale_s) return answer({ status: 200, body: aged(kept), type: json }, "kv-stale", live_memory_s);
+	// adsb.lol answers but doesn't hear it (over an ocean): said so, for the
+	// app then asks OpenSky, which may.
 	if (s) {
 		const body = JSON.stringify(s);
 		remember(key, 200, body, json);
 		return answer({ status: 200, body, type: json }, "adsb.lol", live_memory_s);
 	}
+	// adsb.lol can't answer (down, slow, too many requests): where the
+	// flight was last heard, if lately, and how long ago.
+	const kept = await env.FLIGHTS.get<Heard>(key, "json");
+	if (kept && now() - kept.at < live_stale_s) return answer({ status: 200, body: aged(kept), type: json }, "kv-stale", live_memory_s);
 	return answer({ status: 502, body: `{"error":"adsb.lol","status":${got.status}}`, type: json }, "error", 0);
 }
 

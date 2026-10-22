@@ -9,9 +9,12 @@ so the app only changes where it asks (`-Dapi=...`).
 - **Routes are kept in KV for a week**: each airline's routes (standing
   data's CSV), and a day's note when an airline has none.
 - **Each flight's last known position is kept in KV** (an hour). When
-  adsb.lol fails or stops hearing a plane (over an ocean), the Worker
-  answers with where it was last heard for ten minutes, its age grown
-  ("heard 2m ago"), instead of nothing.
+  adsb.lol fails (down, slow, too many requests), the Worker answers with
+  where it was last heard for ten minutes, its age grown ("heard 2m ago"),
+  instead of nothing. When adsb.lol answers but doesn't hear the plane
+  (over an ocean), that is said, so the app asks OpenSky, which may.
+- **Answers say how long they keep** (`Cache-Control`): the phone's own
+  HTTP cache keeps routes an hour and positions five seconds.
 - **OpenSky's client stays here**, as the Worker's secrets, not in the app.
 
 | Route | Answer |
@@ -43,6 +46,7 @@ Made with [`cf`](https://developers.cloudflare.com/cf/), Cloudflare's CLI
 npm install
 npm run dev          # cf dev: http://localhost:5173, with a local KV
 npm run typecheck
+npm run smoke        # every route against the live sources (or: npm run smoke -- https://...)
 npx cf deploy        # makes the FLIGHTS namespace the first time
 ```
 
